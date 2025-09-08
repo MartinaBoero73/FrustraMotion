@@ -1,5 +1,5 @@
-Parámetros utilizados:
-=====================
+Parameters used:
+================
 
 loess_span: 0.05
 min_frst_range: 0.7

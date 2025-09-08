@@ -1,11 +1,11 @@
-RESUMEN DE ANÁLISIS DE CLUSTERS DINÁMICOS
-=========================================
+DYNAMIC CLUSTERS ANALYSIS SUMMARY
+=================================
 
-Total de residuos: 264
-Residuos seleccionados: 68
-Número de clusters: 4
+Total residues: 264
+Selected residues: 68
+Number of clusters: 4
 
-Resumen por cluster:
+Summary per cluster:
 -------------------
         Residue    Chain   Mean        FrstRange       
           count <lambda>   mean    std      mean    std
