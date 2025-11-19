@@ -49,10 +49,38 @@ def parse_arguments():
             args.variability, args.frame, args.dynamic)
 
 
+def extract_chain_id_from_filename(filename):
+    """
+    Extract the original chain ID from filenames with ASCII codes.
+    Examples:
+        'frustration_chain_0_ascii48.csv' -> '0'
+        'frustration_chain_A_ascii65.csv' -> 'A'
+        'frustration_chain_a_ascii97.csv' -> 'a'
+    """
+    # Remove .csv extension
+    name_without_ext = filename.replace('.csv', '')
+
+    # Split by underscores
+    parts = name_without_ext.split('_')
+
+    # Format: frustration_chain_X_asciiY
+    # We need the third part (index 2)
+    if len(parts) >= 4 and parts[0] == 'frustration' and parts[1] == 'chain':
+        chain_id = parts[2]
+        return chain_id
+
+    # Fallback for old format without ASCII
+    if len(parts) == 3 and parts[0] == 'frustration' and parts[1] == 'chain':
+        return parts[2]
+
+    return None
+
+
 def load_dataframes(dataframes_dir):
     """
-    Load frustration dataframes from the specified directory
-    Returns a dictionary of dataframes (one per chain) or a single dataframe
+    Load frustration dataframes from the specified directory.
+    Handles both old format (frustration_chain_X.csv) and new format with ASCII codes.
+    Returns a dictionary of dataframes (one per chain) or a single dataframe.
     """
     frustration_data = {}
 
@@ -64,9 +92,16 @@ def load_dataframes(dataframes_dir):
     # Otherwise look for chain-specific files
     for filename in os.listdir(dataframes_dir):
         if filename.startswith('frustration_chain_') and filename.endswith('.csv'):
-            chain_id = filename.split('_')[-1].split('.')[0]
+            # Extract chain ID from filename
+            chain_id = extract_chain_id_from_filename(filename)
+
+            if chain_id is None:
+                print(f"Warning: Could not extract chain ID from filename: {filename}")
+                continue
+
             df_path = os.path.join(dataframes_dir, filename)
             frustration_data[chain_id] = pd.read_csv(df_path)
+            print(f"Loaded chain {chain_id} from {filename}")
 
     if not frustration_data:
         print(f"Error: No frustration dataframes found in {dataframes_dir}")
@@ -476,13 +511,13 @@ def plot_frustration_boxplots(frustration_data, frame_num, output_dir, chain_id 
     )
 
     # Highlight residue
-    highlight_suffixes = [str(high_residue)]
-
-    residue_list = combined_df['residue'].unique()
-    for i, res in enumerate(residue_list):
-        if any(res[1:] == suffix for suffix in highlight_suffixes):
-            high_res = res
-            ax.axvspan(i - 0.5, i + 0.5, color='lightcoral', alpha=0.3, zorder=0)
+    if high_residue is not None:
+        highlight_suffixes = [str(high_residue)]
+        residue_list = combined_df['residue'].unique()
+        for i, res in enumerate(residue_list):
+            if any(res[1:] == suffix for suffix in highlight_suffixes):
+                high_res = res
+                ax.axvspan(i - 0.5, i + 0.5, color='lightcoral', alpha=0.3, zorder=0)
 
     # Color each box based on values
     residue_list = combined_df['residue'].unique()
@@ -606,15 +641,16 @@ def plot_dynamic_frustration_boxplots(frustration_data, output_dir, chain_id, da
     )
 
     # Highlight residue
-    highlight_suffixes = [str(high_residue)]
-
-    residue_list = plot_df['residue'].unique()
-    for i, res in enumerate(residue_list):
-        if any(res[1:]==suffix for suffix in highlight_suffixes):
-            high_res = res
-            ax.axvspan(i - 0.5, i + 0.5, color='lightcoral', alpha=0.3, zorder=0)
+    if high_residue is not None:
+        highlight_suffixes = [str(high_residue)]
+        residue_list = plot_df['residue'].unique()
+        for i, res in enumerate(residue_list):
+            if any(res[1:] == suffix for suffix in highlight_suffixes):
+                high_res = res
+                ax.axvspan(i - 0.5, i + 0.5, color='lightcoral', alpha=0.3, zorder=0)
 
     # Color each box based on values
+    residue_list = plot_df['residue'].unique()
     for i, residue in enumerate(residue_list):
         values = plot_df[plot_df['residue'] == residue]['frustration'].values
         all_below = all(val < -1 for val in values)

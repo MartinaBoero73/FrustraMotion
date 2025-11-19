@@ -78,7 +78,11 @@ def save_dataframes(dataframes, protein_name, isolate, true_isolate):
     if isinstance(dataframes, dict):
         # Multiple chains - save each as separate file
         for chain_id, df in dataframes.items():
-            output_path = os.path.join(output_dir, f'frustration_chain_{chain_id}.csv')
+            # Use ASCII code to make chain IDs unique on case-insensitive filesystems (I'm looking at you, Windows)
+            # This preserves the chain ID in the filename while ensuring uniqueness
+            safe_chain_id = f"{chain_id}_ascii{ord(chain_id)}"
+
+            output_path = os.path.join(output_dir, f'frustration_chain_{safe_chain_id}.csv')
             df.to_csv(output_path, index=False)
             print(f"Saved dataframe for chain {chain_id} to {output_path}")
     else:
