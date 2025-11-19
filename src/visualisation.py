@@ -511,13 +511,13 @@ def plot_frustration_boxplots(frustration_data, frame_num, output_dir, chain_id 
     )
 
     # Highlight residue
-    highlight_suffixes = [str(high_residue)]
-
-    residue_list = combined_df['residue'].unique()
-    for i, res in enumerate(residue_list):
-        if any(res[1:] == suffix for suffix in highlight_suffixes):
-            high_res = res
-            ax.axvspan(i - 0.5, i + 0.5, color='lightcoral', alpha=0.3, zorder=0)
+    if high_residue is not None:
+        highlight_suffixes = [str(high_residue)]
+        residue_list = combined_df['residue'].unique()
+        for i, res in enumerate(residue_list):
+            if any(res[1:] == suffix for suffix in highlight_suffixes):
+                high_res = res
+                ax.axvspan(i - 0.5, i + 0.5, color='lightcoral', alpha=0.3, zorder=0)
 
     # Color each box based on values
     residue_list = combined_df['residue'].unique()
@@ -641,15 +641,16 @@ def plot_dynamic_frustration_boxplots(frustration_data, output_dir, chain_id, da
     )
 
     # Highlight residue
-    highlight_suffixes = [str(high_residue)]
-
-    residue_list = plot_df['residue'].unique()
-    for i, res in enumerate(residue_list):
-        if any(res[1:]==suffix for suffix in highlight_suffixes):
-            high_res = res
-            ax.axvspan(i - 0.5, i + 0.5, color='lightcoral', alpha=0.3, zorder=0)
+    if high_residue is not None:
+        highlight_suffixes = [str(high_residue)]
+        residue_list = plot_df['residue'].unique()
+        for i, res in enumerate(residue_list):
+            if any(res[1:] == suffix for suffix in highlight_suffixes):
+                high_res = res
+                ax.axvspan(i - 0.5, i + 0.5, color='lightcoral', alpha=0.3, zorder=0)
 
     # Color each box based on values
+    residue_list = plot_df['residue'].unique()
     for i, residue in enumerate(residue_list):
         values = plot_df[plot_df['residue'] == residue]['frustration'].values
         all_below = all(val < -1 for val in values)
