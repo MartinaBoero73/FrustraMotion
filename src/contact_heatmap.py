@@ -95,17 +95,14 @@ def plot_frustration_heatmap(matrix, residues, title='Mapa de Contactos de Frust
     
     # Definir colormap
     if cmap_type == 'diverging':
-        # Azul (frustrado) - Blanco (neutro) - Rojo (favorable)
         cmap = LinearSegmentedColormap.from_list('frustration',
-                                                 ['#2563eb', '#93c5fd', '#f0f0f0', 
-                                                  '#fecaca', '#dc2626'])
+                                                 ['#dc2626', '#fecaca', '#f0f0f0', '#bafcdd', '#25eb99'])
     elif cmap_type == 'sequential':
         cmap = 'viridis'
-    elif cmap_type == 'custom':
-        # Azul fuerte para muy frustrado, rojo para muy favorable
+    else:
         cmap = LinearSegmentedColormap.from_list('custom_frst',
-                                                 ['#1e3a8a', '#3b82f6', '#e5e7eb', 
-                                                  '#f97316', '#dc2626'])
+                                                 ['#8a1e1e', '#f69f3b', '#e5e7eb', 
+                                                  '#16a6f9', '#2ee01c'])
     
     # Calcular límites si no se proporcionan
     if vmin is None:
@@ -127,7 +124,6 @@ def plot_frustration_heatmap(matrix, residues, title='Mapa de Contactos de Frust
 
     ax.set_xticklabels([residues[i] for i in xticks], rotation=90, fontsize=8)
     ax.set_yticklabels([residues[i] for i in yticks], fontsize=8)
-
     
     # Etiquetas
     ax.set_xlabel('Número de Residuo', fontsize=12, fontweight='bold')
@@ -307,14 +303,13 @@ def create_animated_heatmap(df, output_path='frustration_animation.gif',
     # Definir colormap
     if cmap_type == 'diverging':
         cmap = LinearSegmentedColormap.from_list('frustration',
-                                                 ['#2563eb', '#93c5fd', '#f0f0f0', 
-                                                  '#fecaca', '#dc2626'])
+                                                 ['#dc2626', '#fecaca', '#f0f0f0', '#bafcdd', '#25eb99'])
     elif cmap_type == 'sequential':
         cmap = 'viridis'
     else:
         cmap = LinearSegmentedColormap.from_list('custom_frst',
-                                                 ['#1e3a8a', '#3b82f6', '#e5e7eb', 
-                                                  '#f97316', '#dc2626'])
+                                                 ['#8a1e1e', '#f69f3b', '#e5e7eb', 
+                                                  '#16a6f9', '#2ee01c'])
     
     # Crear figura
     fig, ax = plt.subplots(figsize=figsize)
@@ -333,7 +328,6 @@ def create_animated_heatmap(df, output_path='frustration_animation.gif',
 
     ax.set_xticklabels([all_residues[i] for i in xticks], rotation=90, fontsize=8)
     ax.set_yticklabels([all_residues[i] for i in yticks], fontsize=8)
-
     
     # Título dinámico
     title = ax.set_title(f'Frame: {frames[0]}', fontsize=14, fontweight='bold', pad=20)
