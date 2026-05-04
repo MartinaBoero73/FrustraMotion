@@ -3,6 +3,7 @@ import pandas as pd
 import sys
 import os
 import argparse
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
@@ -14,6 +15,8 @@ def parse_arguments():
                       help='Specific chain to analyze (e.g., "0", "A"). If not specified, uses the first chain found.')
     parser.add_argument('--residue', type=str, required=True,
                       help='Specific residue ID to analyse (e.g., "W45" or "45"). Required.')
+    parser.add_argument('--rolling', type=int, default=0,
+                      help='Window size for the rolling average trendline. (default: 0)')
     parser.add_argument('--out_dir', type=str, default='./plots',
                       help='Directory where the generated plots will be saved (default: ./plots)')
 
@@ -79,11 +82,12 @@ def calculate_times(frust_vals):
 
 def plot_frustration_vs_frames(df, residue_id, chain_id, out_dir, rolling_window=50):
     """
-    Plot frustration values across frames for a specific residue and chain.
+    Plot frustration values across frames for a specific residue and chain,
+    including a rolling average trendline if specified.
     """
     # Try to match the exact string (e.g., 'W45') or just the number ('45')
     res_data = df[(df['Chain'] == chain_id) & 
-                  ((df['Residue'] == residue_id) | (df['Residue'].str.contains(f"^[A-Z]{residue_id}$")))]
+                  ((df['Residue'] == residue_id) | (df['Residue'].str.contains(f"^[A-Z]{residue_id}$")))].copy()
                   
     if res_data.empty:
         print(f"[!] Warning: No data found for Chain '{chain_id}', Residue '{residue_id}'")
@@ -105,21 +109,27 @@ def plot_frustration_vs_frames(df, residue_id, chain_id, out_dir, rolling_window
 
     plt.figure(figsize=(20, 5))
 
-    # Line connecting points (the "motion" aspect)
-    plt.plot(frames, frust_vals, color='gray', linewidth=0.5, linestyle='-', zorder=1)
+    # Line connecting points
+    plt.plot(frames, frust_vals, color='lightgray', linewidth=0.5, linestyle='-', zorder=1)
 
     # Reference threshold lines
-    plt.axhline(y=0, color='k', linestyle='--', alpha=0.5)
-    plt.axhline(y=-1, color='r', linestyle=':', alpha=0.5)
-    plt.axhline(y=0.58, color='g', linestyle=':', alpha=0.5)
+    plt.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+    plt.axhline(y=-1, color='red', linestyle=':', alpha=0.7, linewidth=1.5)
+    plt.axhline(y=0.58, color='green', linestyle=':', alpha=0.7, linewidth=1.5)
 
     # Scatter points with conditional colors based on Frustration Index
     colors = ['green' if y > 0.58 else 'red' if y < -1.0 else 'gray' for y in frust_vals]
-    plt.scatter(frames, frust_vals, c=colors, s=20, zorder=2)
+    plt.scatter(frames, frust_vals, c=colors, s=15, alpha=0.6, zorder=2)
+
+    # Add Rolling Average Trendline if requested
+    if rolling_window > 0 and len(frust_vals) > rolling_window:
+        res_data['Rolling'] = res_data['FrstIndex'].rolling(window=rolling_window, center=True).mean()
+        plt.plot(frames, res_data['Rolling'], color='blue', linewidth=2.5, zorder=3, 
+                 label=f'Rolling Average ({rolling_window} frames)')
 
     # Styling the plot
     plt.ylim(-4, 2)
-    plt.gca().invert_yaxis() # Energy landscapes usually have lower (more stable/frustrated) values down
+    plt.gca().invert_yaxis()
     
     plt.xlabel('Frame Number', fontweight='bold', fontsize=12)
     plt.ylabel('Frustration Index', fontweight='bold', fontsize=12)
@@ -132,7 +142,11 @@ def plot_frustration_vs_frames(df, residue_id, chain_id, out_dir, rolling_window
         mpatches.Patch(color='red', label='Highly Frustrated (< -1.0)'),
         mpatches.Patch(color='gray', label='Neutral')
     ]
-    plt.legend(handles=handles, loc='upper right', framealpha=0.9)
+    if rolling_window > 0 and len(frust_vals) > rolling_window:
+        import matplotlib.lines as mlines
+        handles.append(mlines.Line2D([], [], color='blue', linewidth=2.5, label=f'Trendline ({rolling_window}f)'))
+        
+    plt.legend(handles=handles, loc='lower right', framealpha=0.9)
 
     plt.tight_layout()
     
@@ -164,7 +178,7 @@ def main():
     
     # Generate the Time-Series Plot
     print(f"[*] Generating Temporal Plot for Residue {args.residue}...")
-    plot_frustration_vs_frames(df_master, args.residue, chain_id, args.out_dir)
+    plot_frustration_vs_frames(df_master, args.residue, chain_id, args.out_dir, args.rolling)
 
     print("[*] Process complete!\n")
 
