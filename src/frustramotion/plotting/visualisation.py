@@ -64,7 +64,20 @@ def load_tidy_data(dataframes_dir, target_chain=None):
     master_df = pd.concat(all_dfs, ignore_index=True)
     return master_df
 
-def plot_frustration_vs_frames(df, residue_id, chain_id, out_dir):
+def calculate_times(frust_vals):
+    """
+    Calculates the percentage of time spent in each frustration state.
+    """
+    total = len(frust_vals)
+    if total == 0: return 0, 0, 0
+    
+    min_frust = np.sum(frust_vals > 0.58) / total * 100
+    high_frust = np.sum(frust_vals < -1.0) / total * 100
+    neutral = np.sum((frust_vals >= -1.0) & (frust_vals <= 0.58)) / total * 100
+    
+    return min_frust, high_frust, neutral
+
+def plot_frustration_vs_frames(df, residue_id, chain_id, out_dir, rolling_window=50):
     """
     Plot frustration values across frames for a specific residue and chain.
     """
@@ -82,7 +95,15 @@ def plot_frustration_vs_frames(df, residue_id, chain_id, out_dir):
     frames = res_data['Frame'].values
     frust_vals = res_data['FrstIndex'].values
 
-    plt.figure(figsize=(20, 4))
+    # Biophysical Stats
+    p_min, p_high, p_neutral = calculate_times(frust_vals)
+    stats_text = (
+        f"- Minimally Frustrated: {p_min:.1f}%\n"
+        f"- Highly Frustrated: {p_high:.1f}%\n"
+        f"- Neutral: {p_neutral:.1f}%"
+    )
+
+    plt.figure(figsize=(20, 5))
 
     # Line connecting points (the "motion" aspect)
     plt.plot(frames, frust_vals, color='gray', linewidth=0.5, linestyle='-', zorder=1)
@@ -119,6 +140,11 @@ def plot_frustration_vs_frames(df, residue_id, chain_id, out_dir):
     out_path = os.path.join(out_dir, f"timeseries_chain_{chain_id}_res_{residue_id}.png")
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
     print(f" -> Saved plot successfully: {out_path}")
+    print("\n" + "-"*30)
+    print(f"Residue {residue_id} Profile:")
+    print(stats_text)
+    print("-"*30 + "\n")
+    
     plt.close()
 
 
