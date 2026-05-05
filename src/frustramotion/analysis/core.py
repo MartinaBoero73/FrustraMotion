@@ -3,28 +3,17 @@ import numpy as np
 
 class FrustrationTrajectory:
     """
-    Core analytical engine for FrustraMotion.
-    Takes a DataFrame (Single Residue or Contacts) and computes advanced biophysical metrics.
+    Core analytical engine for FrustraMotion (Single Residue Level).
+    Takes a Tidy DataFrame of Single Residues and computes advanced biophysical metrics.
     """
     
     def __init__(self, df):
-        # Ensure the required base columns exist
-        if not all(col in df.columns for col in ['Frame', 'FrstIndex']):
-            raise ValueError("[!] Error: DataFrame must contain 'Frame' and 'FrstIndex' columns.")
+        # Ensure the required base columns exist for single residue data
+        if not all(col in df.columns for col in ['Frame', 'FrstIndex', 'Residue']):
+            raise ValueError("[!] Error: DataFrame must contain 'Frame', 'FrstIndex', and 'Residue' columns.")
         
         self.df = df.copy()
         
-        # Determine if we are analyzing Single Residue or Contacts
-        self.mode = 'contacts' if 'Pair' in df.columns or 'ResID1' in df.columns else 'single'
-        self.entity_col = 'Pair' if self.mode == 'contacts' else 'Residue'
-        
-        # Build the 'Pair' identifier for contacts if it doesn't exist
-        if self.mode == 'contacts' and 'Pair' not in self.df.columns:
-            self.df['Pair'] = self.df.apply(
-                lambda r: f"{r['ResID1']} ↔ {r['ResID2']}" if r['ResID1'] < r['ResID2'] else f"{r['ResID2']} ↔ {r['ResID1']}", 
-                axis=1
-            )
-            
         # Pre-calculate categorical states for advanced metrics
         conditions = [
             (self.df['FrstIndex'] > 0.78),
@@ -35,26 +24,26 @@ class FrustrationTrajectory:
 
     def get_hotspots(self, top_n=10):
         """
-        Calculates the variance (dynamism) of each entity over time.
-        Highlights regions with high energetic fluctuations.
+        Calculates the variance (dynamism) of each residue over time.
+        Highlights regions with high energetic fluctuations (potential hinges/switches).
         """
-        stats = self.df.groupby(self.entity_col)['FrstIndex'].agg(['std', 'mean', 'max', 'min'])
+        stats = self.df.groupby('Residue')['FrstIndex'].agg(['std', 'mean', 'max', 'min'])
         stats = stats.rename(columns={'std': 'Dynamic_Score'})
         
-        # Filter out noise (entities present in less than 10% of the frames)
-        counts = self.df.groupby(self.entity_col).size()
-        valid_entities = counts[counts > (self.df['Frame'].nunique() * 0.1)].index
-        stats = stats.loc[valid_entities]
+        # Filter out noise (residues present in less than 10% of the frames)
+        counts = self.df.groupby('Residue').size()
+        valid_residues = counts[counts > (self.df['Frame'].nunique() * 0.1)].index
+        stats = stats.loc[valid_residues]
         
         hotspots = stats.sort_values(by='Dynamic_Score', ascending=False)
         return hotspots.head(top_n)
 
     def get_dwell_times(self):
         """
-        Calculates the % of time each entity spends in each frustration state.
+        Calculates the % of time each residue spends in each frustration state.
         Sorted by the 'Highly' frustrated percentage in descending order.
         """
-        counts = self.df.groupby([self.entity_col, 'State']).size().unstack(fill_value=0)
+        counts = self.df.groupby(['Residue', 'State']).size().unstack(fill_value=0)
         
         # Convert to percentages (0-100%)
         dwell_times = counts.div(counts.sum(axis=1), axis=0) * 100
@@ -71,12 +60,12 @@ class FrustrationTrajectory:
 
     def get_state_entropy(self):
         """
-        Calculates the Shannon Entropy of frustration states for each entity.
+        Calculates the Shannon Entropy of frustration states for each residue.
         High entropy means the residue visits all states equally (highly dynamic switch).
         Low entropy means it is locked in a single energetic state.
         """
         # Get raw probabilities (0 to 1) instead of percentages
-        counts = self.df.groupby([self.entity_col, 'State']).size().unstack(fill_value=0)
+        counts = self.df.groupby(['Residue', 'State']).size().unstack(fill_value=0)
         probs = counts.div(counts.sum(axis=1), axis=0)
         
         # Calculate Shannon Entropy: H = -sum(p * log2(p))
@@ -89,12 +78,12 @@ class FrustrationTrajectory:
 
     def get_flipping_rate(self):
         """
-        Counts how many times an entity transitions from one state to another.
+        Counts how many times a residue transitions from one state to another.
         Normalized by the total number of frames it exists in.
         """
         flip_rates = []
         
-        for entity, group in self.df.groupby(self.entity_col):
+        for residue, group in self.df.groupby('Residue'):
             group = group.sort_values('Frame')
             states = group['State'].values
             
@@ -106,12 +95,12 @@ class FrustrationTrajectory:
             rate = transitions / len(states)
             
             flip_rates.append({
-                self.entity_col: entity,
+                'Residue': residue,
                 'Total_Transitions': transitions,
                 'Flipping_Rate': rate
             })
             
-        return pd.DataFrame(flip_rates).set_index(self.entity_col).sort_values(by='Flipping_Rate', ascending=False)
+        return pd.DataFrame(flip_rates).set_index('Residue').sort_values(by='Flipping_Rate', ascending=False)
 
     def get_persistence(self):
         """
@@ -120,7 +109,7 @@ class FrustrationTrajectory:
         """
         persistence_data = []
         
-        for entity, group in self.df.groupby(self.entity_col):
+        for residue, group in self.df.groupby('Residue'):
             group = group.sort_values('Frame')
             states = group['State'].values
             
@@ -141,12 +130,12 @@ class FrustrationTrajectory:
             max_minimally = max_consecutive(states, 'Minimally')
             
             persistence_data.append({
-                self.entity_col: entity,
+                'Residue': residue,
                 'Max_Streak_Highly': max_highly,
                 'Max_Streak_Minimally': max_minimally
             })
             
-        return pd.DataFrame(persistence_data).set_index(self.entity_col).sort_values(by='Max_Streak_Highly', ascending=False)
+        return pd.DataFrame(persistence_data).set_index('Residue').sort_values(by='Max_Streak_Highly', ascending=False)
 
     def detect_transitions(self, window=20, threshold=1.0):
         """
@@ -155,7 +144,7 @@ class FrustrationTrajectory:
         """
         transitions = []
         
-        for entity, group in self.df.groupby(self.entity_col):
+        for residue, group in self.df.groupby('Residue'):
             group = group.sort_values('Frame')
             frst = group['FrstIndex'].values
             frames = group['Frame'].values
@@ -170,7 +159,7 @@ class FrustrationTrajectory:
                 
                 if delta >= threshold:
                     transitions.append({
-                        self.entity_col: entity,
+                        'Residue': residue,
                         'Frame_Trigger': frames[i],
                         'Past_Energy': past_mean,
                         'Future_Energy': future_mean,
@@ -179,6 +168,6 @@ class FrustrationTrajectory:
                     
         if transitions:
             trans_df = pd.DataFrame(transitions)
-            return trans_df.sort_values(by='Delta', ascending=False).drop_duplicates(subset=[self.entity_col])
+            return trans_df.sort_values(by='Delta', ascending=False).drop_duplicates(subset=['Residue'])
         else:
             return pd.DataFrame()
