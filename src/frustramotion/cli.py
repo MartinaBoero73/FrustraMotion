@@ -1,6 +1,7 @@
 import argparse
 import sys
 import pandas as pd
+import os
 
 # Use try/except to catch import errors if the package is not installed correctly
 try:
@@ -10,8 +11,8 @@ try:
     from frustramotion.plotting.contacts import load_contact_data, plot_residue_contacts
     from frustramotion.analysis.single import SingleResidueAnalyzer
     from frustramotion.analysis.contact import ContactNetworkAnalyzer
-    from frustramotion.io.export_vmd import generate_vmd_script
-    from frustramotion.io.export_chimerax import generate_chimerax_script
+    from frustramotion.io.export_vmd import VMDExporter
+    from frustramotion.io.export_chimerax import ChimeraXExporter
 
 except ImportError:
     print("[!] Import Error. Install all the required packages or move to the correct directory.")
@@ -105,12 +106,29 @@ def handle_analyze(args):
 def handle_export(args):
     print(f"\n[*] FrustraMotion Exporter - Software: {args.software}")
     df = pd.read_csv(args.input_csv)
-    if args.software == 'vmd':
-        generate_vmd_script(df, args.pdb, args.out, metric=args.metric, chain_id=args.chain)
-    elif args.software == 'chimerax':
-        out_file = args.out if args.out.endswith('.cxc') else args.out + '.cxc'
-        generate_chimerax_script(df, args.pdb, out_file, metric=args.metric, chain_id=args.chain)
+    ext_map = {
+        'vmd': '.tcl',
+        'chimerax': '.cxc'
+    }
+    target_ext = ext_map[args.software]
 
+    if not args.out:
+        out_file = f"export_{args.software}{target_ext}"
+    else:
+        base_name, current_ext = os.path.splitext(args.out)
+        out_file = base_name + target_ext
+
+    try:
+        if args.software == 'vmd':
+            exporter = VMDExporter(df, args.pdb, out_file, metric=args.metric, chain_id=args.chain)
+        elif args.software == 'chimerax':
+            exporter = ChimeraXExporter(df, args.pdb, out_file, metric=args.metric, chain_id=args.chain)
+        
+        exporter.export()
+        
+    except ValueError as e:
+        print(e)
+        sys.exit(1)
 
 # ==========================================
 # MAIN CLI ROUTER
@@ -158,7 +176,7 @@ def main():
     parser_export.add_argument('--pdb', required=True, help='Path to the reference PDB file')
     parser_export.add_argument('-m', '--metric', choices=['hotspots', 'entropy', 'flipping'], default='hotspots', help='Which metric to map')
     parser_export.add_argument('-c', '--chain', help='Specific chain to color')
-    parser_export.add_argument('-o', '--out', default='./heatmap.cxc', help='Output script path')
+    parser_export.add_argument('-o', '--out', help='Output script path')
 
     args = parser.parse_args()
 
