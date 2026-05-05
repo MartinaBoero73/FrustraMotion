@@ -1,12 +1,18 @@
 import pandas as pd
 import os
 import re
-from frustramotion.analysis.core import FrustrationTrajectory
+from frustramotion.analysis.single import SingleResidueAnalyzer
 
 def generate_chimerax_script(df, pdb_file, output_path, metric='hotspots', chain_id=None):
     """
     Generates a ChimeraX (.cxc) script to map FrustraMotion metrics onto a 3D structure.
     """
+    # Ensure it's a Single Residue DF
+    if 'ResID1' in df.columns or 'Residue' not in df.columns:
+        print("[!] Error: Expected a Single Residue DataFrame, but a Contact Network DataFrame was provided.")
+        print("    Please use a single residue CSV for this specific export function.")
+        return False
+
     if chain_id is None:
         chain_id = df['Chain'].iloc[0]
         
@@ -16,7 +22,7 @@ def generate_chimerax_script(df, pdb_file, output_path, metric='hotspots', chain
         print(f"[!] Error: No data found for Chain {chain_id}")
         return False
 
-    traj = FrustrationTrajectory(chain_data)
+    traj = SingleResidueAnalyzer(chain_data)
     
     # Calculate Metric
     metric_title = ""

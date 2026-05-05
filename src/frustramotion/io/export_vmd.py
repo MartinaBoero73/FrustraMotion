@@ -2,13 +2,19 @@ import pandas as pd
 import os
 import re
 
-from frustramotion.analysis.core import FrustrationTrajectory
+from frustramotion.analysis.single import SingleResidueAnalyzer
 
 def generate_vmd_script(df, pdb_file, output_path, metric='hotspots', chain_id=None):
     """
     Generates a VMD TCL script to color a protein based on dynamic FrustraMotion metrics.
     Injects the calculated metrics into the B-factor (beta) column for gradient coloring.
     """
+    # Ensure it's a Single Residue DF
+    if 'ResID1' in df.columns or 'Residue' not in df.columns:
+        print("[!] Error: Expected a Single Residue DataFrame, but a Contact Network DataFrame was provided.")
+        print("    Please use a single residue CSV for this specific export function.")
+        return False
+    
     if chain_id is None:
         chain_id = df['Chain'].iloc[0]
         
@@ -20,7 +26,7 @@ def generate_vmd_script(df, pdb_file, output_path, metric='hotspots', chain_id=N
 
 
     # 1. Initialize Analytics Engine
-    traj = FrustrationTrajectory(chain_data)
+    traj = SingleResidueAnalyzer(chain_data)
     
     # 2. Calculate the requested metric
     metric_name_in_vmd = ""
