@@ -52,7 +52,7 @@ def load_contact_data(dataframes_dir, residue_id):
     master_df = pd.concat(all_dfs, ignore_index=True)
     return master_df
 
-def plot_residue_contacts(contacts, residue_id, out_dir, contact_type):
+def plot_residue_contacts(contacts, residue_id, out_dir, contact_type = 'intra'):
     """
     Plots a multi-panel dashboard for the contact network of a specific residue
     """
@@ -78,37 +78,41 @@ def plot_residue_contacts(contacts, residue_id, out_dir, contact_type):
     res_contacts = res_contacts.sort_values(by='Frame')
     frames = np.sort(res_contacts['Frame'].unique())
     
-    # Panel 1 Data: Mean Frustration per frame
-    mean_frust = res_contacts.groupby('Frame')['FrstIndex'].mean()
-    rolling_frust = mean_frust.rolling(window=20, center=True, min_periods=1).mean()
+    min_frust = res_contacts.groupby('Frame')['FrstIndex'].min() # Most stressed contact
+    max_frust = res_contacts.groupby('Frame')['FrstIndex'].max() # Most stable contact
 
     # Panel 2 Data: Contact counts by type
-    # Normalize welltype names just in case
     res_contacts['Welltype'] = res_contacts['Welltype'].str.replace('water-mediated', 'water')
     counts = res_contacts.groupby(['Frame', 'Welltype']).size().unstack(fill_value=0)
-    # Ensure all columns exist to avoid plotting errors
     for col in ['short', 'long', 'water']:
         if col not in counts.columns: counts[col] = 0
 
-    # Panel 3 Data: Pivot table for the heatmap (Partner vs Frame)
-    pivot = res_contacts.pivot(index='Partner', columns='Frame', values='FrstIndex')
+    # Panel 3 Data: Pivot table for the heatmap
+    dedup = res_contacts.sort_values('FrstIndex').drop_duplicates(subset=['Frame', 'Partner'])
+    pivot = dedup.pivot(index='Partner', columns='Frame', values='FrstIndex')
 
-    
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(18, 14), gridspec_kw={'height_ratios': [1, 1, 2]}, sharex=True)
     fig.suptitle(f'Microenvironment Dynamics: {residue_id} ({contact_type.upper()} Mode)', fontsize=18, fontweight='bold', y=0.95)
 
-    # --- 1: Network Frustration ---
-    ax1.plot(mean_frust.index, mean_frust.values, color='gray', alpha=0.4, label='Mean FrstIndex')
-    ax1.plot(rolling_frust.index, rolling_frust.values, color='blue', linewidth=2, label='Rolling Avg (20f)')
-    ax1.axhline(0, color='black', linestyle=':', alpha=0.5)
-    ax1.invert_yaxis() # Biology standard: negative/stable is down
-    ax1.set_ylabel('Avg Frustration\nIndex', fontweight='bold')
+    frames_p1 = min_frust.index.values
+    
+    ax1.fill_between(frames_p1, min_frust.values, max_frust.values, color='gray', alpha=0.15, label='Energetic Span')
+    
+    ax1.plot(frames_p1, min_frust.values, color='red', linewidth=1.5, alpha=0.8, label='Most Frustrated Contact')
+    ax1.plot(frames_p1, max_frust.values, color='green', linewidth=1.5, alpha=0.8, label='Most Stable Contact')
+    
+    ax1.axhline(y=0, color='k', linestyle='-', alpha=0.3, zorder=0)
+    ax1.axhline(y=-1.0, color='red', linestyle='--', alpha=0.7, linewidth=1.5, zorder=0)
+    ax1.axhline(y=0.78, color='green', linestyle='--', alpha=0.7, linewidth=1.5, zorder=0)
+
+    ax1.set_ylim(2, -4)
+    ax1.set_ylabel('Frustration Index\n(Extremes)', fontweight='bold')
+    ax1.grid(True, linestyle=':', alpha=0.6)
+    ax1.set_title("A. Energetic Envelope (Most Stressed vs Most Stable Contact)", loc='left', fontweight='bold')
     ax1.legend(loc='upper right')
-    ax1.grid(True, linestyle='--', alpha=0.3)
-    ax1.set_title("A. Local Network Energetics (Mean Frustration of all contacts)", loc='left', fontweight='bold')
+    # ==========================================
 
     # --- 2: Contact Composition ---
-    # Stacked area plot
     ax2.stackplot(counts.index, counts['short'], counts['long'], counts['water'],
                   labels=['Short', 'Long', 'Water-mediated'],
                   colors=['#ff9999', '#66b3ff', '#99ff99'], alpha=0.8)
@@ -127,7 +131,6 @@ def plot_residue_contacts(contacts, residue_id, out_dir, contact_type):
         c = partner_data['FrstIndex']
         
         colors = ['green' if val > 0.78 else 'red' if val < -1.0 else 'gray' for val in c]
-        
         ax3.scatter(x, y, c=colors, s=30, alpha=0.8, marker='s')
 
     ax3.set_yticks(range(len(partners)))
@@ -137,7 +140,6 @@ def plot_residue_contacts(contacts, residue_id, out_dir, contact_type):
     ax3.grid(True, linestyle=':', alpha=0.5, axis='y')
     ax3.set_title("C. Interaction Timeline", loc='left', fontweight='bold')
 
-    # Legend for Panel 3
     import matplotlib.patches as mpatches
     handles = [
         mpatches.Patch(color='green', label='Minimally Frust.'),
@@ -149,7 +151,6 @@ def plot_residue_contacts(contacts, residue_id, out_dir, contact_type):
     plt.tight_layout()
     plt.subplots_adjust(top=0.90)
 
-    # Save
     safe_res = residue_id.replace(':', '_')
     out_path = os.path.join(out_dir, f"contact_dashboard_{safe_res}_{contact_type}.png")
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
