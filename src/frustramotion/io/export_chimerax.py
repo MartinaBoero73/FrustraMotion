@@ -1,79 +1,48 @@
-import pandas as pd
-import os
-import re
-from frustramotion.analysis.core import FrustrationTrajectory
+from frustramotion.io.base import Base3DExporter
 
-def generate_chimerax_script(df, pdb_file, output_path, metric='hotspots', chain_id=None):
-    """
-    Generates a ChimeraX (.cxc) script to map FrustraMotion metrics onto a 3D structure.
-    """
-    if chain_id is None:
-        chain_id = df['Chain'].iloc[0]
-        
-    chain_data = df[df['Chain'] == chain_id].copy()
+class ChimeraXExporter(Base3DExporter):
     
-    if chain_data.empty:
-        print(f"[!] Error: No data found for Chain {chain_id}")
-        return False
-
-    traj = FrustrationTrajectory(chain_data)
-    
-    # Calculate Metric
-    metric_title = ""
-    if metric == 'hotspots':
-        stats = traj.get_hotspots(top_n=9999).reset_index()
-        value_col = 'Dynamic_Score'
-        metric_title = "Dynamic Variance"
-    elif metric == 'entropy':
-        stats = traj.get_state_entropy().reset_index()
-        value_col = 'Shannon_Entropy'
-        metric_title = "State Entropy"
-    elif metric == 'flipping':
-        stats = traj.get_flipping_rate().reset_index()
-        value_col = 'Flipping_Rate'
-        metric_title = "Flipping Rate"
-    else:
-        print(f"[!] Error: Metric '{metric}' not supported.")
-        return False
-
-    def get_resnum(res_str):
-        match = re.search(r'\d+', str(res_str))
-        return match.group() if match else ""
-    
-    stats['ResNum'] = stats['Residue'].apply(get_resnum)
-    
-    # Normalize 0-100 for coloring
-    min_val = stats[value_col].min()
-    max_val = stats[value_col].max()
-    stats['Bfactor'] = ((stats[value_col] - min_val) / (max_val - min_val)) * 100
-
-    abs_pdb_path = os.path.abspath(pdb_file).replace('\\', '/')
-
-    with open(output_path, 'w') as cxc:
-        cxc.write(f"# FrustraMotion ChimeraX Export | Metric: {metric_title}\n\n")
-        
-        # Base Environment
-        cxc.write("set bgColor white\n")
-        cxc.write("lighting soft\n\n")
-        
-        # Load Model
-        cxc.write(f"open \"{abs_pdb_path}\"\n")
-        cxc.write("hide atoms\n")
-        cxc.write(f"show /{chain_id} cartoon\n\n")
-        
-        # Inject custom b-factor values per residue
-        cxc.write("# Injecting analytical values into B-factor...\n")
-        for _, row in stats.iterrows():
-            resnum = row['ResNum']
-            bfactor = row['Bfactor']
-            # ChimeraX command to set attribute: setattr target attribute value selection
-            cxc.write(f"setattr /{chain_id}:{resnum} atoms bfactor {bfactor:.2f}\n")
+    def export(self):
+        with open(self.output_path, 'w') as cxc:
+            cxc.write(f"# FrustraMotion ChimeraX Export\n")
+            cxc.write(f"# Chain: {self.chain_id}\n\n")
             
-        # Coloring command (Blue -> White -> Red)
-        cxc.write("\n# Applying Heatmap Colors\n")
-        cxc.write(f"color byattribute bfactor /{chain_id} palette blue:white:red\n")
-            
-        cxc.write("\nview\n")
-        
-    print(f" -> ChimeraX 3D Script generated successfully: {output_path}")
-    return True
+            # Setup Environment
+            cxc.write("set bgColor white\nlighting soft\n\n")
+            cxc.write(f"open \"{self.pdb_file}\"\nhide atoms\n")
+            cxc.write(f"show /{self.chain_id} cartoon\n\n")
+
+            if self.is_contacts:
+                print("[*] Generating ChimeraX Network Pseudobonds...")
+                hot_edges, stable_edges = self.get_contact_data()
+                
+                cxc.write(f"color /{self.chain_id} light gray\n")
+                cxc.write(f"transparency /{self.chain_id} 40 target c\n\n")
+                
+                def draw_edges(edges, color):
+                    for pair_id, _ in edges.iterrows():
+                        res1_num = self.get_resnum(pair_id.split('_')[0])
+                        res2_num = self.get_resnum(pair_id.split('_')[1])
+                        if res1_num and res2_num:
+                            cxc.write(f"distance /{self.chain_id}:{res1_num}@CA /{self.chain_id}:{res2_num}@CA\n")
+                            cxc.write(f"color /{self.chain_id}:{res1_num}@CA /{self.chain_id}:{res2_num}@CA {color} target p\n")
+
+                cxc.write("# --- Highly Frustrated (Red) ---\n")
+                draw_edges(hot_edges, "red")
+                cxc.write("\n# --- Minimally Frustrated (Green) ---\n")
+                draw_edges(stable_edges, "green")
+                
+                cxc.write("\nhide pbonds label\nsize target p 0.2\n")
+
+            else:
+                stats, title = self.get_single_residue_data()
+                print(f"[*] Generating ChimeraX B-Factor Heatmap: {title}...")
+                
+                cxc.write("# Injecting analytical values into B-factor...\n")
+                for _, row in stats.iterrows():
+                    cxc.write(f"setattr /{self.chain_id}:{row['ResNum']} atoms bfactor {row['Bfactor']:.2f}\n")
+                    
+                cxc.write(f"\ncolor byattribute bfactor /{self.chain_id} palette blue:white:red\n")
+
+            cxc.write("\nview\n")
+        print(f" -> Saved ChimeraX Script: {self.output_path}")
