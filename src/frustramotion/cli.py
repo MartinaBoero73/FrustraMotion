@@ -9,6 +9,7 @@ try:
     from frustramotion.plotting.timeseries import load_tidy_data, plot_frustration_vs_frames
     from frustramotion.plotting.contacts import load_contact_data, plot_residue_contacts
     from frustramotion.analysis.core import FrustrationTrajectory
+    from frustramotion.analysis.contact import ContactNetworkAnalyzer
     from frustramotion.io.export_vmd import generate_vmd_script
     from frustramotion.io.export_chimerax import generate_chimerax_script
 
@@ -56,13 +57,17 @@ def main():
     parser_analyze = subparsers.add_parser('analyze', help='Run mathematical and biophysical analysis on trajectories')
     parser_analyze.add_argument('-i', '--input_csv', required=True, help='A specific CSV file (e.g., chain_A.csv)')
     
-    # Added the new metrics to the choices
+    # Add ALL metrics (single residue + contacts) to the choices
     parser_analyze.add_argument('metric', 
-                                choices=['hotspots', 'dwell', 'transitions', 'entropy', 'flipping', 'persistence'], 
+                                choices=[
+                                    # Single Residue Metrics
+                                    'hotspots', 'dwell', 'transitions', 'entropy', 'flipping', 'persistence',
+                                    # Contact Network Metrics
+                                    'hubs', 'hot_edges', 'contact_persistence'
+                                ], 
                                 help='Which biophysical metric to calculate')
                                 
     parser_analyze.add_argument('-o', '--out_csv', default='./analysis_results.csv', help='Where to save the results table')
-
 
     # ==========================================
     # COMMAND 4: frustramotion export
@@ -114,27 +119,62 @@ def main():
         print(f"\n[*] FrustraMotion Analytics - Calculating: {args.metric}")
         
         df = pd.read_csv(args.input_csv)
-        traj = FrustrationTrajectory(df)
         
-        # Execute the requested metric
-        if args.metric == 'hotspots':
-            result = traj.get_hotspots(top_n=20)
-        elif args.metric == 'dwell':
-            result = traj.get_dwell_times()
-        elif args.metric == 'transitions':
-            result = traj.detect_transitions(window=20, threshold=1.0)
-        elif args.metric == 'entropy':
-            result = traj.get_state_entropy()
-        elif args.metric == 'flipping':
-            result = traj.get_flipping_rate()
-        elif args.metric == 'persistence':
-            result = traj.get_persistence()
+        # 1. Auto-detect data type based on columns
+        is_contacts_data = 'ResID1' in df.columns
+        
+        # 2. Route to the appropriate engine
+        if not is_contacts_data:
+            # --- SINGLE RESIDUE MODE ---
+            valid_single_metrics = ['hotspots', 'dwell', 'transitions', 'entropy', 'flipping', 'persistence']
             
-        print("\n=== TOP RESULTS ===")
-        print(result.head(10))
-        
-        result.to_csv(args.out_csv)
-        print(f"\n[+] Full results table saved to: {args.out_csv}")
+            if args.metric not in valid_single_metrics:
+                print(f"[!] Error: Metric '{args.metric}' is for Contact Networks, but you provided a Single Residue CSV.")
+                sys.exit(1)
+                
+            print(" -> Detected Single Residue data format.")
+            traj = FrustrationTrajectory(df)
+            
+            if args.metric == 'hotspots':
+                result = traj.get_hotspots(top_n=20)
+            elif args.metric == 'dwell':
+                result = traj.get_dwell_times()
+            elif args.metric == 'transitions':
+                result = traj.detect_transitions(window=20, threshold=1.0)
+            elif args.metric == 'entropy':
+                result = traj.get_state_entropy()
+            elif args.metric == 'flipping':
+                result = traj.get_flipping_rate()
+            elif args.metric == 'persistence':
+                result = traj.get_persistence()
+                
+        else:
+            # --- CONTACT NETWORKS MODE ---
+            valid_contact_metrics = ['hubs', 'hot_edges', 'contact_persistence']
+            
+            if args.metric not in valid_contact_metrics:
+                print(f"[!] Error: Metric '{args.metric}' is for Single Residues, but you provided a Contacts CSV.")
+                sys.exit(1)
+                
+            print(" -> Detected Contact Networks data format.")
+            net_analyzer = ContactNetworkAnalyzer(df)
+            
+            if args.metric == 'hubs':
+                result = net_analyzer.get_frustration_hubs(top_n=20)
+            elif args.metric == 'hot_edges':
+                result = net_analyzer.get_frustration_hot_edges(top_n=20)
+            elif args.metric == 'contact_persistence':
+                result = net_analyzer.get_contact_persistence()
+
+        # 3. Handle empty results and save
+        if result is None or result.empty:
+            print("[!] No significant results found for this metric (table is empty).")
+        else:
+            print("\n=== TOP RESULTS ===")
+            print(result.head(10))
+            
+            result.to_csv(args.out_csv)
+            print(f"\n[+] Full results table saved to: {args.out_csv}")
 
     elif args.command == 'export':
         print(f"\n[*] FrustraMotion Exporter - Software: {args.software}")
