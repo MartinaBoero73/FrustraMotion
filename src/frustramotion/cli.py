@@ -36,9 +36,6 @@ CONTACT_METRICS = {
 }
 
 
-# ==========================================
-# COMMAND HANDLERS (Lógica delegada)
-# ==========================================
 def handle_parse(args):
     print(f"\n[*] FrustraMotion Parser - Mode: {args.mode}")
     if args.mode == 'single':
@@ -72,7 +69,6 @@ def handle_analyze(args):
     df = pd.read_csv(args.input_csv)
     is_contacts_data = 'ResID1' in df.columns
 
-    # 1. Routing y validación inteligente
     if not is_contacts_data:
         if args.metric not in SINGLE_METRICS:
             print(f"[!] Error: Metric '{args.metric}' is for Contact Networks, but you provided a Single Residue CSV.")
@@ -91,8 +87,6 @@ def handle_analyze(args):
         analyzer = ContactNetworkAnalyzer(df)
         method_to_call = getattr(analyzer, CONTACT_METRICS[args.metric])
 
-    # 2. Ejecución dinámica (Factory)
-    # Pasamos parámetros por defecto si la función los requiere
     if args.metric == 'transitions':
         result = method_to_call(window=20, threshold=1.0)
     elif args.metric in ['hotspots', 'hubs', 'hot_edges']:
@@ -100,7 +94,6 @@ def handle_analyze(args):
     else:
         result = method_to_call()
 
-    # 3. Manejo de resultados
     if result is None or result.empty:
         print("[!] No significant results found for this metric (table is empty).")
     else:
