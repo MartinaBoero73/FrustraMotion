@@ -74,9 +74,9 @@ def calculate_times(frust_vals):
     total = len(frust_vals)
     if total == 0: return 0, 0, 0
     
-    min_frust = np.sum(frust_vals > 0.78) / total * 100
+    min_frust = np.sum(frust_vals > 0.55) / total * 100
     high_frust = np.sum(frust_vals < -1.0) / total * 100
-    neutral = np.sum((frust_vals >= -1.0) & (frust_vals <= 0.78)) / total * 100
+    neutral = np.sum((frust_vals >= -1.0) & (frust_vals <= 0.55)) / total * 100
     
     return min_frust, high_frust, neutral
 
@@ -115,10 +115,10 @@ def plot_frustration_vs_frames(df, residue_id, chain_id, out_dir, rolling_window
     # Reference threshold lines
     plt.axhline(y=0, color='k', linestyle='--', alpha=0.3)
     plt.axhline(y=-1, color='red', linestyle=':', alpha=0.7, linewidth=1.5)
-    plt.axhline(y=0.78, color='green', linestyle=':', alpha=0.7, linewidth=1.5)
+    plt.axhline(y=0.55, color='green', linestyle=':', alpha=0.7, linewidth=1.5)
 
     # Scatter points with conditional colors based on Frustration Index
-    colors = ['green' if y > 0.78 else 'red' if y < -1.0 else 'gray' for y in frust_vals]
+    colors = ['green' if y > 0.55 else 'red' if y < -1.0 else 'gray' for y in frust_vals]
     plt.scatter(frames, frust_vals, c=colors, s=15, alpha=0.6, zorder=2)
 
     # Add Rolling Average Trendline if requested
@@ -138,7 +138,7 @@ def plot_frustration_vs_frames(df, residue_id, chain_id, out_dir, rolling_window
 
     # Custom legend
     handles = [
-        mpatches.Patch(color='green', label='Minimally Frustrated (> 0.78)'),
+        mpatches.Patch(color='green', label='Minimally Frustrated (> 0.55)'),
         mpatches.Patch(color='red', label='Highly Frustrated (< -1.0)'),
         mpatches.Patch(color='gray', label='Neutral')
     ]

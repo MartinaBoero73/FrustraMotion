@@ -18,7 +18,7 @@ class SingleResidueAnalyzer(BaseAnalyzer):
         
         # 3. Pre-calculate categorical states for advanced metrics
         conditions = [
-            (self.df['FrstIndex'] > 0.78),
+            (self.df['FrstIndex'] > 0.55), 
             (self.df['FrstIndex'] < -1.0)
         ]
         self.df['State'] = np.select(conditions, ['Minimally', 'Highly'], default='Neutral')
